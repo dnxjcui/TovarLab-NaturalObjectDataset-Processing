@@ -1,0 +1,18 @@
+name: nod-conda          # call it whatever you like
+channels:
+  - conda-forge            # all neuroscience wheels live here
+  - defaults
+dependencies:
+  # ── core ────────────────────────────────────────────────────────
+  - python=3.7
+  - nibabel=3.2.1           # last release before big header-parser rewrite
+  - nilearn=0.7.0
+  - numpy=1.19.2
+  - pandas=1.1.3
+  - scikit-learn=1.0
+  - scipy=1.5.2
+  - tqdm=4.50.2
+  - pip
+  - pip:
+      - fmriprep==20.2.1
+      - ciftify
