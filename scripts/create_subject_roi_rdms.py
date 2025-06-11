@@ -103,17 +103,28 @@ def plot_rdm(rdm_square, subject, session, region, distance_metric, save_dir):
     """Plot and save the RDM heatmap."""
     fig, ax = plt.subplots(figsize=(10, 8))
     im = ax.imshow(rdm_square, cmap='viridis', interpolation='none')
-    plt.colorbar(im, ax=ax, label=f'{distance_metric} Distance')
+    # plt.colorbar(im, ax=ax, label=f'{distance_metric} Distance')
     im.set_clim(0.0, 1.0)
     
-    ax.set_title(f'{subject}, {session}, {region}')
+    # ax.set_title(f'{subject}, {session}, {region}')
     plt.tight_layout()
     
-    if not os.path.exists(os.path.join(save_dir, subject, 'figures')):
-        os.makedirs(os.path.join(save_dir, subject, 'figures'), exist_ok=True)
+    # if not os.path.exists(os.path.join(save_dir, subject, 'figures')):
+    #     os.makedirs(os.path.join(save_dir, subject, 'figures'), exist_ok=True)
     
-    heatmap_path = os.path.join(save_dir, subject, 'figures', f'{region}_roi_rdm_heatmap.png')
-    plt.savefig(heatmap_path, dpi=300)
+    # heatmap_path = os.path.join(save_dir, subject, 'figures', f'{region}_roi_rdm_heatmap.png')
+    # plt.savefig(heatmap_path, dpi=300)
+    if not os.path.exists(os.path.join(save_dir, subject, 'figures', 'rdm_no_background')):
+        os.makedirs(os.path.join(save_dir, subject, 'figures', 'rdm_no_background'), exist_ok=True)
+    
+    heatmap_path = os.path.join(save_dir, subject, 'figures', 'rdm_no_background', f'{region}_roi_rdm_heatmap.png')
+    # axes off
+    ax.axis('off')
+    # ticks off
+    ax.set_xticks([])
+    ax.set_yticks([])
+
+    plt.savefig(heatmap_path, dpi=100, transparent=True)
     print(f"Heatmap saved at {heatmap_path}")
 
     plt.close(fig)
@@ -128,7 +139,7 @@ def main():
     data_dir = "C:/Users/BrainInspired/Documents/GitHub/Seeds/NOD"
     save_dir = "C:/Users/BrainInspired/Documents/GitHub/Seeds/Nick_RDMs/outputs"
     distance_metric = 'cosine'
-    visualize = False
+    visualize = True
 
     if not os.path.exists(data_dir):
         raise FileNotFoundError(f"Data directory does not exist: {data_dir}")
@@ -207,6 +218,8 @@ def main():
                         print(f"Label mismatch for {subject} in {region}: {label} vs {prev_categories[i]}")
                         raise ValueError("Labels do not match across runs.")     
             prev_categories = sorted_categories
+
+        quit()
 
 
 if __name__ == "__main__":
