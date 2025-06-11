@@ -124,7 +124,7 @@ def plot_rdm(rdm_square, subject, session, region, distance_metric, save_dir):
     ax.set_xticks([])
     ax.set_yticks([])
 
-    plt.savefig(heatmap_path, dpi=100, transparent=True)
+    plt.savefig(heatmap_path, dpi=70, transparent=True)
     print(f"Heatmap saved at {heatmap_path}")
 
     plt.close(fig)
