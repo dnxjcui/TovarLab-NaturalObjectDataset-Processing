@@ -119,10 +119,17 @@ def plot_rdm(rdm_square, subject, session, region, distance_metric, save_dir):
     
     heatmap_path = os.path.join(save_dir, subject, 'figures', 'rdm_no_background', f'{region}_roi_rdm_heatmap.png')
     # axes off
-    ax.axis('off')
+    # ax.axis('off')
     # ticks off
     ax.set_xticks([])
     ax.set_yticks([])
+
+    # create a border around the heatmap
+    for spine in ax.spines.values():
+        spine.set_visible(True)
+        spine.set_linewidth(4)
+        spine.set_color('black')
+
 
     plt.savefig(heatmap_path, dpi=70, transparent=True)
     print(f"Heatmap saved at {heatmap_path}")
