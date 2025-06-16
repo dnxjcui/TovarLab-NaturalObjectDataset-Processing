@@ -10,7 +10,7 @@ Usage:
 import argparse
 import numpy as np
 import os
-from analyze_subject_rdms import load_rdms, compute_rdm, plot_rdm
+from Nick_RDMs.scripts.intrasubject_mds_rdm import load_rdms, compute_rdm, plot_rdm
 from scipy.stats import pearsonr
 import matplotlib.pyplot as plt
 from scipy.spatial.distance import squareform
