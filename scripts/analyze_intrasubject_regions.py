@@ -73,12 +73,12 @@ def plot_rdm(rdm_square, distance_metric, labels, save_dir, fname='region_region
     """Plot and save the RDM heatmap."""
     fig, ax = plt.subplots(figsize=(10, 8))
     im = ax.imshow(rdm_square, cmap='viridis', interpolation='none')
-    plt.colorbar(im, ax=ax, label=f'{distance_metric} Distance')
+    # plt.colorbar(im, ax=ax, label=f'{distance_metric} Distance')
     
     if clim is not None:
         im.set_clim(clim[0], clim[1])
     
-    ax.set_title(title)
+    # ax.set_title(title)
     plt.tight_layout()
     heatmap_path = os.path.join(save_dir, fname)
     os.makedirs(save_dir, exist_ok=True)
@@ -86,7 +86,8 @@ def plot_rdm(rdm_square, distance_metric, labels, save_dir, fname='region_region
     plt.xticks(ticks=np.arange(len(labels)), labels=labels, rotation=45, ha='right')
     plt.yticks(ticks=np.arange(len(labels)), labels=labels)
 
-    plt.savefig(heatmap_path, dpi=300)
+    # make transparent background
+    plt.savefig(heatmap_path, dpi=300, transparent=True)
     print(f"Heatmap saved at {heatmap_path}")
 
     plt.close(fig)
