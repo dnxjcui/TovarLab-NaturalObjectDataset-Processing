@@ -94,31 +94,37 @@ def plot_rdm(rdm_square, distance_metric, labels, save_dir, fname='region_region
 
 
 def main():
-    args = parse_args()
+    # args = parse_args()
     
-    rdm_dir = args.rdm_dir
-    subject_n = args.subject_n
-    
-    # Load RDMs for the specified subject
-    rdms = load_rdms(rdm_dir, subject_n)
-    
-    # convert RDMs to a 2d array for computing RDM again
-    rdm_data = np.array([rdms[region] for region in rdms])
+    # rdm_dir = args.rdm_dir
+    # subject_n = args.subject_n
+    rdm_dir = 'C:/Users/BrainInspired/Documents/GitHub/NaturalObjectDataset-Processing/Nick_RDMs/outputs'
+    subject_n = [i for i in range(1, 31)]
 
-    # compute RDM from the loaded RDMs
-    rdm = compute_rdm(rdm_data, metric='correlation') # region-region RDM
+    # hard coding to maintain order
+    regions = ["V1", "V2", "V3", "V4", "V8", "PIT", "FFC", "VVC", "VMV1", "VMV2", "VMV3", "LO1", "LO2", "LO3"]
 
-    # Create save directory if it doesn't exist
-    save_dir = os.path.join(rdm_dir, f'sub-{subject_n:02d}', 'mds_plots')
-    os.makedirs(save_dir, exist_ok=True)
+    for subject_n in subject_n:    
+        # Load RDMs for the specified subject
+        rdms = load_rdms(rdm_dir, subject_n)
+        
+        # convert RDMs to a 2d array for computing RDM again
+        rdm_data = np.array([rdms[region] for region in regions])
 
-    # Plot MDS of computed RDM
-    all_regions = list(rdms.keys())
-    plot_mds(rdm, all_regions, save_dir)
+        # compute RDM from the loaded RDMs
+        rdm = compute_rdm(rdm_data, metric='correlation') # region-region RDM
 
-    plot_rdm(rdm, 'correlation', all_regions, save_dir)
+        # Create save directory if it doesn't exist
+        save_dir = os.path.join(rdm_dir, f'sub-{subject_n:02d}', 'mds_plots')
+        os.makedirs(save_dir, exist_ok=True)
 
-    print(f"MDS plot saved to {save_dir}")
+        # Plot MDS of computed RDM
+        all_regions = list(rdms.keys())
+        plot_mds(rdm, all_regions, save_dir)
+
+        plot_rdm(rdm, 'correlation', all_regions, save_dir)
+
+        print(f"MDS plot saved to {save_dir}")
 
 
 if __name__ == "__main__":

@@ -229,8 +229,11 @@ def compute_wasserstein_distance_matrix(all_fmri, regions):
         r1, r2 = regions[i], regions[j]
         data1 = all_fmri[r1]  # [stimuli, voxels, subjects]
         data2 = all_fmri[r2]
-        vec1 = data1.mean(axis=2).flatten()
-        vec2 = data2.mean(axis=2).flatten()
+        vec1 = data1.reshape(1, -1).flatten()  # Flatten the data
+        vec2 = data2.reshape(1, -1).flatten()  # Flatten the data
+        # vec1 = data1.mean(axis=2).flatten()
+        # vec2 = data2.mean(axis=2).flatten()
+        
         dist = wasserstein_distance(vec1, vec2)
         D[i, j] = D[j, i] = dist
     return D
@@ -267,7 +270,7 @@ def compare_all_fMRI():
     """
 
     regions = ["V1", "V2", "V3", "V4", "V8", "PIT", "FFC", "VVC", "VMV1", "VMV2", "VMV3", "LO1", "LO2", "LO3"]
-    regions.sort()
+    # regions.sort()
     
     subject_n = 30
     session = 'imagenet01'
@@ -345,16 +348,14 @@ def compare_all_fMRI():
             else:
                 all_fmri[region] = np.append(all_fmri[region], sorted_activations, axis=2)
                 print(f"Shape of all_fmri[{region}]: {all_fmri[region].shape}")
-    # quit()
-    if wasserstein:
-        ### IMPLEMENT WASSERSTEIN DISTANCE MAPPING ###
-        grid = compute_wasserstein_distance_matrix(all_fmri, regions)
-        plot_rdm(grid, 'Wasserstein Distance', regions, save_dir, fname='wasserstein_distance_matrix.png', title='Wasserstein Distance Matrix for All Regions', clim=None)
-    else:
-        ### IMPLEMENT CROSS VALIDATED LINEAR MAPPING ###
-        grid = compute_crossval_mapping_distance_matrix(all_fmri, regions)
-        plot_rdm(grid, 'Cross-Validated Linear Mapping Distance', regions, save_dir, fname='crossval_mapping_distance_matrix.png', title='Cross-Validated Linear Mapping Distance Matrix for All Regions', clim=None)
-    print(f"Shape of grid: {grid.shape}")
+    # quit()\
+    
+    grid = compute_wasserstein_distance_matrix(all_fmri, regions)
+    plot_rdm(grid, 'Wasserstein Distance', regions, save_dir, fname='wasserstein_distance_matrix.png', title='Wasserstein Distance Matrix for All Regions', clim=None)\
+    
+    # grid = compute_crossval_mapping_distance_matrix(all_fmri, regions)
+    # plot_rdm(grid, 'Cross-Validated Linear Mapping Distance', regions, save_dir, fname='crossval_mapping_distance_matrix.png', title='Cross-Validated Linear Mapping Distance Matrix for All Regions', clim=None)
+    # print(f"Shape of grid: {grid.shape}")
     # plot the grid
     
 
