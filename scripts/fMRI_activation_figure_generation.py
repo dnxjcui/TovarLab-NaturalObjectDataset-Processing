@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
 """
-create_subject_roi_rdms.py
+fMRI_activation_figure_generation.py
 
-Create Representational Dissimilarity Matrices (RDMs) for each ROI using beta weights.
-
-Usage:
-  python create_subject_roi_rdms.py --data_dir ds004496 --output_dir derivatives/subject_roi_rdms --task imagenet01
+Create heatmap figures representative the pure fMRI voxel activation patterns per region per subject.
 """
 import os
 import glob
@@ -20,19 +17,7 @@ import matplotlib.pyplot as plt
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.append(str(BASE_DIR))
-
 from NOD_fmri.validation.nod_utils import get_roi_data
-
-
-def parse_args():
-    parser = argparse.ArgumentParser(description="Create RDMs for each ROI using beta weights.")
-    parser.add_argument('--data_dir', type=str, required=True, 
-                       help='Path to the BIDS data directory (e.g., ds004496)')
-    parser.add_argument('--output_dir', type=str, required=True, 
-                       help='Directory to save the RDMs')
-    parser.add_argument('--task', type=str, default='imagenet',
-                       help='Task to create RDMs for (default: imagenet)')
-    return parser.parse_args()
 
 
 def get_roi_indices(region):
@@ -51,6 +36,7 @@ def load_beta_weights(beta_file, roi_file=None):
     if roi_file is not None:
         roi_img = nib.load(roi_file)
         roi_data = roi_img.get_fdata()
+
         # Mask beta data with ROI
         masked_beta = beta_data[:, roi_data[0] > 0]
     else:
@@ -127,8 +113,6 @@ def main():
     run_n = 10
     data_dir = "C:/Users/BrainInspired/Documents/GitHub/Seeds/NOD"
     save_dir = "C:/Users/BrainInspired/Documents/GitHub/Seeds/Nick_RDMs/outputs"
-    distance_metric = 'cosine'
-    visualize = False
 
     if not os.path.exists(data_dir):
         raise FileNotFoundError(f"Data directory does not exist: {data_dir}")
@@ -143,8 +127,6 @@ def main():
         print(f"Region: {region}, Indices shape: {roi_indices[0].shape}")
         region_roi_indices[region] = roi_indices    
 
-    prev_categories = None
-    # os.chdir(os.path.join(BASE_DIR, '../'))
     subject = all_subjects[0]
     print(f"Processing subject: {subject}")
     all_beta_data = None
@@ -189,13 +171,10 @@ def main():
         
         fig, ax = plt.subplots(figsize=(10, 8))
         im = ax.imshow(sorted_activations, cmap='viridis', interpolation='none')
-        # plt.colorbar(im, ax=ax, label=f'Activation')
         im.set_clim(clim[0], clim[1])
         
-        # ax.set_title(f'{subject}, {session}, {region}')
         plt.tight_layout()
 
-        # turn axes off
         ax.set_xticks([])
         ax.set_yticks([])
         
