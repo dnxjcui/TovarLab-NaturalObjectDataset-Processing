@@ -165,7 +165,7 @@ def compare_similarity_matrices():
     plot_rdm(rdm, 'Correlation', all_regions, save_dir, fname='all_regions_rdm2rdm.png', title='RDM-RDM RDM Heatmap for All Regions')
 
 
-def compute_wasserstein_distance_matrix(all_fmri, regions):
+def compute_wasserstein_distance_matrix(all_fmri, regions, plot_1d_vectors=False):
     """ 
     Compute a distance matrix using Wasserstein distance between regions.
     This function computes the Wasserstein distance between regions based on their flattened fMRI data. 
@@ -173,16 +173,27 @@ def compute_wasserstein_distance_matrix(all_fmri, regions):
     """
     n = len(regions)
     D = np.zeros((n, n))
+
+    if plot_1d_vectors:
+        all_1d_vectors = {}
+
     for i, j in itertools.combinations(range(n), 2):
         r1, r2 = regions[i], regions[j]
         data1 = all_fmri[r1]  # [stimuli, voxels, subjects]
         data2 = all_fmri[r2]
         vec1 = data1.reshape(1, -1).flatten()
-        vec2 = data2.reshape(1, -1).flatten()
+        vec2 = data2.reshape(1, -1).flatten()        
 
-        dist = wasserstein_distance(vec1, vec2)
-        D[i, j] = D[j, i] = dist
-    return D
+        if not plot_1d_vectors:
+            dist = wasserstein_distance(vec1, vec2)
+            D[i, j] = D[j, i] = dist
+        else:
+            all_1d_vectors[r1] = vec1
+            all_1d_vectors[r2] = vec2
+    if not plot_1d_vectors:
+        return D
+    else:
+        return all_1d_vectors
 
 
 def compute_crossval_mapping_distance_matrix(all_fmri, regions, alpha=1.0, n_splits=5):
@@ -299,8 +310,24 @@ def compare_all_fMRI():
                 all_fmri[region] = np.append(all_fmri[region], sorted_activations, axis=2)
                 print(f"Shape of all_fmri[{region}]: {all_fmri[region].shape}")
     
-    grid = compute_wasserstein_distance_matrix(all_fmri, regions)
-    plot_rdm(grid, 'Wasserstein Distance', regions, save_dir, fname='wasserstein_distance_matrix.png', title='Wasserstein Distance Matrix for All Regions', clim=None)/
+    # for figure making 
+    plot_1d_vectors = True
+    if plot_1d_vectors:
+        all_1d_vectors = compute_wasserstein_distance_matrix(all_fmri, regions, plot_1d_vectors=True)
+        for region, vec in all_1d_vectors.items():
+            plt.figure(figsize=(100, 1))
+
+            # crop vector to the first 1000 elements for better visualization
+            vec = vec[:1000]
+            plt.imshow(vec.reshape(1, -1), aspect='auto', cmap='viridis')
+
+            if not os.path.exists(os.path.join(save_dir, "1dvecs")):
+                os.makedirs(os.path.join(save_dir, "1dvecs"), exist_ok=True)
+            plt.savefig(os.path.join(save_dir, "1dvecs", f'{region}_1d_vector.png'), transparent=True, dpi=300)
+            plt.close()
+    else:
+        grid = compute_wasserstein_distance_matrix(all_fmri, regions)
+        plot_rdm(grid, 'Wasserstein Distance', regions, save_dir, fname='wasserstein_distance_matrix.png', title='Wasserstein Distance Matrix for All Regions', clim=None)
     
     # grid = compute_crossval_mapping_distance_matrix(all_fmri, regions)
     # plot_rdm(grid, 'Cross-Validated Linear Mapping Distance', regions, save_dir, fname='crossval_mapping_distance_matrix.png', title='Cross-Validated Linear Mapping Distance Matrix for All Regions', clim=None)
