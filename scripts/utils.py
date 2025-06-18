@@ -145,11 +145,6 @@ def plot_rdm_heatmap(rdm_square, distance_metric, labels, save_dir,
     os.makedirs(save_dir, exist_ok=True)
 
     colorbar = True
-    if colorbar:
-        cbar = plt.colorbar(im, ax=ax)
-        cbar.set_ticks([vmin, vmax])
-        cbar.set_ticklabels(['Low Distance', 'High Distance'])
-
     if fontsize is not None:
         plt.xticks(ticks=np.arange(len(labels)), labels=labels, rotation=45, ha='right', fontsize=fontsize)
         plt.yticks(ticks=np.arange(len(labels)), labels=labels, fontsize=fontsize)
@@ -159,6 +154,11 @@ def plot_rdm_heatmap(rdm_square, distance_metric, labels, save_dir,
         for file in os.listdir(save_dir):
             if file.endswith('.eps') or file.endswith('.svg') or file.endswith('.png'):
                 os.remove(os.path.join(save_dir, file))
+
+        if colorbar:
+            cbar = plt.colorbar(im, ax=ax)
+            cbar.set_ticks([vmin, vmax])
+            cbar.set_ticklabels(['Low Distance', 'High Distance'], fontsize=fontsize)
 
         if fname.split('.')[-1] == 'eps':
             plt.savefig(heatmap_path, dpi=300, transparent=True, format='eps')
@@ -180,7 +180,11 @@ def plot_rdm_heatmap(rdm_square, distance_metric, labels, save_dir,
         heatmap_path = os.path.join(save_dir, 
                                   fname.split('.')[0] + f'_{fontsize}pt.' + 
                                   fname.split('.')[-1])
-        # plt.savefig(heatmap_path, dpi=300, transparent=True)
+        if colorbar:
+            cbar = plt.colorbar(im, ax=ax)
+            cbar.set_ticks([vmin, vmax])
+            cbar.set_ticklabels(['Low Distance', 'High Distance'], fontsize=fontsize)
+
         if fname.split('.')[-1] == 'eps':
             plt.savefig(heatmap_path, dpi=300, transparent=True, format='eps')
         elif fname.split('.')[-1] == 'svg':
@@ -227,7 +231,7 @@ def get_labels(data_dir, subject, session, task, run):
     
     return label_categories, fnames
 
-def plot_mds_visualization(rdm, all_regions, save_dir):
+def plot_mds_visualization(rdm, all_regions, save_dir, fname='mds_plot.png', fontsize=12):
     """
     Plot MDS visualization of the RDM and save the figure.
     
@@ -243,15 +247,23 @@ def plot_mds_visualization(rdm, all_regions, save_dir):
     plt.scatter(coords[:, 0], coords[:, 1], marker='o', color='blue')
     
     for i, region in enumerate(all_regions):
-        plt.annotate(region, (coords[i, 0], coords[i, 1]), fontsize=12)
+        plt.annotate(region, (coords[i, 0], coords[i, 1]), fontsize=fontsize)
 
-    plt.title('MDS of RDM')
-    plt.xlabel('MDS Dimension 1')
-    plt.ylabel('MDS Dimension 2')
+    # plt.title('MDS of RDM', )
+    plt.xlabel('MDS Dimension 1', fontsize=fontsize)
+    plt.ylabel('MDS Dimension 2', fontsize=fontsize)
     plt.grid(True)
     
-    save_path = os.path.join(save_dir, 'mds_plot.png')
-    plt.savefig(save_path)
+    save_path = os.path.join(save_dir, fname)
+    if fname.split('.')[-1] == 'png':
+        plt.savefig(save_path, dpi=300, transparent=True)
+    elif fname.split('.')[-1] == 'eps':
+        plt.savefig(save_path, dpi=300, transparent=True, format='eps')
+    elif fname.split('.')[-1] == 'svg':
+        plt.savefig(save_path, dpi=300, transparent=True, format='svg')
+    else:
+        plt.savefig(save_path, dpi=300, transparent=True)
+
     plt.close()
 
 def compute_wasserstein_distance_matrix(all_fmri, regions, plot_1d_vectors=False):

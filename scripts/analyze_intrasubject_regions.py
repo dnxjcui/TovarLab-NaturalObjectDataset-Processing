@@ -171,7 +171,10 @@ def comparison_of_voxels():
     
         # Compute Wasserstein distance matrix for this subject only
         print(f"Computing Wasserstein distance matrix for {subject}")
+
         distance_matrix = compute_wasserstein_distance_matrix(subject_fmri, regions)
+
+        plot_mds_visualization(distance_matrix, regions, save_dir, fname='mds_plot.svg', fontsize=20)
         
         # Plot and save the region-region distance matrix for this subject
         plot_rdm_heatmap(
