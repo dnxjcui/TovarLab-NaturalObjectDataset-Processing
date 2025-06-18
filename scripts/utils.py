@@ -144,7 +144,17 @@ def plot_rdm_heatmap(rdm_square, distance_metric, labels, save_dir,
         plt.yticks(ticks=np.arange(len(labels)), labels=labels, fontsize=fontsize)
 
         heatmap_path = os.path.join(save_dir, fname.split('.')[0] + f'_{fontsize}pt.' + fname.split('.')[-1])
-        plt.savefig(heatmap_path, dpi=300, transparent=True)
+
+        for file in os.listdir(save_dir):
+            if file.endswith('.eps') or file.endswith('.svg') or file.endswith('.png'):
+                os.remove(os.path.join(save_dir, file))
+
+        if fname.split('.')[-1] == 'eps':
+            plt.savefig(heatmap_path, dpi=300, transparent=True, format='eps')
+        elif fname.split('.')[-1] == 'svg':
+            plt.savefig(heatmap_path, dpi=300, transparent=True, format='svg')
+        else:
+            plt.savefig(heatmap_path, dpi=300, transparent=True)
         print(f"Heatmap saved at {heatmap_path}")
 
         plt.close(fig)
@@ -162,6 +172,8 @@ def plot_rdm_heatmap(rdm_square, distance_metric, labels, save_dir,
         # plt.savefig(heatmap_path, dpi=300, transparent=True)
         if fname.split('.')[-1] == 'eps':
             plt.savefig(heatmap_path, dpi=300, transparent=True, format='eps')
+        elif fname.split('.')[-1] == 'svg':
+            plt.savefig(heatmap_path, dpi=300, transparent=True, format='svg')
         else:
             plt.savefig(heatmap_path, dpi=300, transparent=True)
         print(f"Heatmap saved at {heatmap_path}")
