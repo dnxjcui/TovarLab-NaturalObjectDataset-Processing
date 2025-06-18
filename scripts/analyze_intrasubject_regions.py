@@ -181,7 +181,8 @@ def comparison_of_voxels():
             save_dir, 
             fname=f'{subject}_intrasubject_wasserstein_distance_matrix.svg', 
             title=f'Intrasubject Wasserstein Distance Matrix for {subject}', 
-            clim=None
+            clim=None,
+            fontsize=20
         )
         
         # Also save the matrix as numpy array
