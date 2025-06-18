@@ -22,6 +22,19 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.append(str(BASE_DIR))
 
 from NOD_fmri.validation.nod_utils import get_roi_data
+from utils import (
+    get_region_roi_indices, 
+    load_beta_weights_with_roi_mask, 
+    compute_rdm_from_betas, 
+    get_beta_data,
+    get_labels,
+    plot_rdm_heatmap,
+    VISUAL_REGIONS,
+    DEFAULT_SESSION,
+    DEFAULT_TASK,
+    DEFAULT_RUN_COUNT,
+    DEFAULT_SUBJECT_COUNT
+)
 
 
 def parse_args():
@@ -35,114 +48,51 @@ def parse_args():
     return parser.parse_args()
 
 
-def get_roi_indices(region):
-    """Get indices of ROIs; calls on get_roi_data and simply abstracts it."""
-    os.chdir(os.path.join(BASE_DIR, 'NOD_fmri', 'validation')) 
-    roi_indices = np.where(get_roi_data(None, region) == 1)
-    os.chdir(BASE_DIR) 
-    return roi_indices
+# Removed duplicated functions - now using imports from utils.py
 
 
-def load_beta_weights(beta_file, roi_file=None):
-    """Load beta weights for a specific run, optionally masked by an ROI."""
-    beta_img = nib.load(beta_file)
-    beta_data = beta_img.get_fdata()
-    
-    if roi_file is not None:
-        roi_img = nib.load(roi_file)
-        roi_data = roi_img.get_fdata()
-        # Mask beta data with ROI
-        masked_beta = beta_data[:, roi_data[0] > 0]
-    else:
-        masked_beta = beta_data
-    
-    return masked_beta
+# Moved get_labels function to utils.py
 
 
-def compute_rdm(beta_weights, metric='correlation'):
-    """Compute RDM from beta weights using correlation distance."""
-    rdm = squareform(pdist(beta_weights, metric=metric))
-    return rdm
-
-
-def get_beta_data(data_dir, subject, session, task, run):
-    """Get beta data for a specific subject, session, task, and run."""
-    beta_path = os.path.join(data_dir, 'derivatives', 'ciftify', subject, 
-                             'results', f'ses-{session}_task-{task}_{run}', 
-                             f'ses-{session}_task-{task}_{run}_beta.dscalar.nii')
-    
-    if not os.path.exists(beta_path):
-        raise FileNotFoundError(f"Beta file does not exist: {beta_path}")
-    
-    beta_img = nib.load(beta_path)
-    return beta_img.get_fdata()
-
-
-def get_labels(data_dir, subject, session, task, run):
-    """Get labels for a specific subject, session, task, and run."""
-    labels_path = os.path.join(data_dir, 'derivatives', 'ciftify', subject, 
-                               'results', f'ses-{session}_task-{task}_{run}', 
-                               f'ses-{session}_task-{task}_{run}_label.txt')
-    
-    if not os.path.exists(labels_path):
-        raise FileNotFoundError(f"Labels file does not exist: {labels_path}")
-    
-    with open(labels_path, 'r') as f:
-        labels = f.read().strip().split('\n')
-    
-    # Original format as label/label_number 
-    label_categories = [(label.split('/'))[0] for label in labels] 
-    label_categories = [(label.split('_'))[0] for label in label_categories]
-
-    fnames = [(label.split('/'))[1 if len(label.split('/')) == 2 else 0] for label in labels] 
-    
-    return label_categories, fnames
-
-
-def plot_rdm(rdm_square, subject, session, region, distance_metric, save_dir):
-    """Plot and save the RDM heatmap."""
+def plot_rdm_no_background(rdm_square, subject, session, region, distance_metric, save_dir):
+    """
+    Plot and save the RDM heatmap with no background (transparent, no axes).
+    This is a specialized version for the specific styling needs of this script.
+    """
     fig, ax = plt.subplots(figsize=(10, 8))
     im = ax.imshow(rdm_square, cmap='viridis', interpolation='none')
-    # plt.colorbar(im, ax=ax, label=f'{distance_metric} Distance')
     im.set_clim(0.0, 1.0)
     
-    # ax.set_title(f'{subject}, {session}, {region}')
     plt.tight_layout()
     
-    # if not os.path.exists(os.path.join(save_dir, subject, 'figures')):
-    #     os.makedirs(os.path.join(save_dir, subject, 'figures'), exist_ok=True)
+    # Create directory if it doesn't exist
+    background_dir = os.path.join(save_dir, subject, 'figures', 'rdm_no_background')
+    if not os.path.exists(background_dir):
+        os.makedirs(background_dir, exist_ok=True)
     
-    # heatmap_path = os.path.join(save_dir, subject, 'figures', f'{region}_roi_rdm_heatmap.png')
-    # plt.savefig(heatmap_path, dpi=300)
-    if not os.path.exists(os.path.join(save_dir, subject, 'figures', 'rdm_no_background')):
-        os.makedirs(os.path.join(save_dir, subject, 'figures', 'rdm_no_background'), exist_ok=True)
+    heatmap_path = os.path.join(background_dir, f'{region}_roi_rdm_heatmap.png')
     
-    heatmap_path = os.path.join(save_dir, subject, 'figures', 'rdm_no_background', f'{region}_roi_rdm_heatmap.png')
-    # axes off
-    # ax.axis('off')
-    # ticks off
+    # Remove axes and ticks
     ax.set_xticks([])
     ax.set_yticks([])
 
-    # create a border around the heatmap
+    # Create a border around the heatmap
     for spine in ax.spines.values():
         spine.set_visible(True)
         spine.set_linewidth(4)
         spine.set_color('black')
 
-
     plt.savefig(heatmap_path, dpi=70, transparent=True)
-    print(f"Heatmap saved at {heatmap_path}")
-
+    print(f"No-background heatmap saved at {heatmap_path}")
     plt.close(fig)
 
 
 def main():
-    regions = ["V1", "V2", "V3", "V4", "V8", "PIT", "FFC", "VVC", "VMV1", "VMV2", "VMV3", "LO1", "LO2", "LO3"]
-    subject_n = 30
-    session = 'imagenet01'
-    task = 'imagenet'
-    run_n = 10
+    regions = VISUAL_REGIONS
+    subject_n = DEFAULT_SUBJECT_COUNT
+    session = DEFAULT_SESSION
+    task = DEFAULT_TASK
+    run_n = DEFAULT_RUN_COUNT
     data_dir = "C:/Users/BrainInspired/Documents/GitHub/Seeds/NOD"
     save_dir = "C:/Users/BrainInspired/Documents/GitHub/Seeds/Nick_RDMs/outputs"
     distance_metric = 'cosine'
@@ -156,7 +106,7 @@ def main():
 
     region_roi_indices = {}
     for region in regions:
-        roi_indices = get_roi_indices(region)
+        roi_indices = get_region_roi_indices(region)
         
         print(f"Region: {region}, Indices shape: {roi_indices[0].shape}")
         region_roi_indices[region] = roi_indices    
@@ -201,10 +151,24 @@ def main():
             sorted_fnames = [all_fnames[i] for i in sorted_indices]
             full_fpaths = [os.path.join(category, fname) for category, fname in zip(sorted_categories, sorted_fnames)]
 
-            rdm_square = compute_rdm(sorted_activations, metric=distance_metric)
+            rdm_square = compute_rdm_from_betas(sorted_activations, metric=distance_metric)
             
             if visualize:
-                plot_rdm(rdm_square, subject, session, region, distance_metric, save_dir)
+                # Use the specialized no-background version for specific styling needs
+                plot_rdm_no_background(rdm_square, subject, session, region, distance_metric, save_dir)
+                
+                # Also create a standard version using utils.py function
+                standard_save_dir = os.path.join(save_dir, subject, 'figures', 'standard')
+                plot_rdm_heatmap(
+                    rdm_square, 
+                    distance_metric, 
+                    [], # no labels for cleaner look
+                    standard_save_dir, 
+                    fname=f'{region}_roi_rdm_standard.png',
+                    title=f'{subject} {region} RDM',
+                    clim=(0.0, 1.0),
+                    fontsize=12
+                )
             
             # save out RDM as a vector
             rdm_vector = squareform(rdm_square)

@@ -10,17 +10,24 @@ Usage:
 import argparse
 import numpy as np
 import os
-from analyze_intrasubject_regions import load_rdms, compute_rdm, plot_rdm
+from analyze_intrasubject_regions import load_rdms
 from scipy.stats import pearsonr
 import matplotlib.pyplot as plt
 from scipy.spatial.distance import squareform
-import numpy as np
-import matplotlib.pyplot as plt
-from sklearn.linear_model import Ridge
-from sklearn.model_selection import KFold
-from scipy.stats import wasserstein_distance
-import itertools
-from create_subject_roi_rdms import get_beta_data, get_labels, get_roi_indices
+from utils import (
+    compute_rdm_from_betas, 
+    plot_rdm_heatmap,
+    get_beta_data, 
+    get_labels, 
+    get_region_roi_indices,
+    compute_wasserstein_distance_matrix,
+    compute_crossval_mapping_distance_matrix,
+    VISUAL_REGIONS,
+    DEFAULT_SESSION,
+    DEFAULT_TASK,
+    DEFAULT_RUN_COUNT,
+    DEFAULT_SUBJECT_COUNT
+)
 
 
 def rdm_correlation(a, b, distance_metric='pearson'):
@@ -103,7 +110,7 @@ def make_similarity_matrices(plot=True):
     """
     rdm_dir = 'C:/Users/BrainInspired/Documents/GitHub/NaturalObjectDataset-Processing/Nick_RDMs/outputs'
     save_dir = os.path.join(rdm_dir, 'intersubject-RDMs')
-    regions = ["V1", "V2", "V3", "V4", "V8", "PIT", "FFC", "VVC", "VMV1", "VMV2", "VMV3", "LO1", "LO2", "LO3"]
+    regions = VISUAL_REGIONS
 
     subjects = [ int(dir.split('-')[1]) for dir in os.listdir(rdm_dir) if dir.startswith('sub-') ]
     
@@ -121,7 +128,7 @@ def make_similarity_matrices(plot=True):
 
         all_rdms = np.array(all_rdms)
 
-        subject_subject_rdm = compute_rdm(all_rdms, metric='correlation')
+        subject_subject_rdm = compute_rdm_from_betas(all_rdms, metric='correlation')
 
         assert(all_rdms.shape[0] == subject_subject_rdm.shape[0])
 
@@ -158,71 +165,17 @@ def compare_similarity_matrices():
         print(f"Shape of all_rdms after concatenation: {all_rdms.shape}")
 
     # now we compute the RDM per region
-    rdm = compute_rdm(all_rdms, metric='correlation')
+    rdm = compute_rdm_from_betas(all_rdms, metric='correlation')
 
     # plot the RDM for all regions
     all_regions = list(rdm_per_region.keys())
-    plot_rdm(rdm, 'Correlation', all_regions, save_dir, fname='all_regions_rdm2rdm.png', title='RDM-RDM RDM Heatmap for All Regions')
+    plot_rdm_heatmap(rdm, 'Correlation', all_regions, save_dir, fname='all_regions_rdm2rdm.png', title='RDM-RDM RDM Heatmap for All Regions')
 
 
-def compute_wasserstein_distance_matrix(all_fmri, regions, plot_1d_vectors=False):
-    """ 
-    Compute a distance matrix using Wasserstein distance between regions.
-    This function computes the Wasserstein distance between regions based on their flattened fMRI data. 
-    It assumes that all_fmri is a dictionary where keys are region names and values are 3D numpy arrays of shape [stimuli, voxels, subjects].
-    """
-    n = len(regions)
-    D = np.zeros((n, n))
-
-    if plot_1d_vectors:
-        all_1d_vectors = {}
-
-    for i, j in itertools.combinations(range(n), 2):
-        r1, r2 = regions[i], regions[j]
-        data1 = all_fmri[r1]  # [stimuli, voxels, subjects]
-        data2 = all_fmri[r2]
-        vec1 = data1.reshape(1, -1).flatten()
-        vec2 = data2.reshape(1, -1).flatten()        
-
-        if not plot_1d_vectors:
-            dist = wasserstein_distance(vec1, vec2)
-            D[i, j] = D[j, i] = dist
-        else:
-            all_1d_vectors[r1] = vec1
-            all_1d_vectors[r2] = vec2
-    if not plot_1d_vectors:
-        return D
-    else:
-        return all_1d_vectors
 
 
-def compute_crossval_mapping_distance_matrix(all_fmri, regions, alpha=1.0, n_splits=5):
-    """ 
-    Compute a distance matrix using cross-validation mapping between regions.
-    This function computes the distance between regions based on the cross-validated prediction error of a Ridge regression model.
-    """
-    n = len(regions)
-    D = np.zeros((n, n))
-    for i, j in itertools.combinations(range(n), 2):
-        r1, r2 = regions[i], regions[j]
-        data1 = all_fmri[r1]
-        data2 = all_fmri[r2]
-        stimuli, vox1, subs = data1.shape
-        errors = []
-        for s in range(subs):
-            X = data1[:, :, s]
-            Y = data2[:, :, s]
-            kf = KFold(n_splits=n_splits, shuffle=True, random_state=42)
-            for train_idx, test_idx in kf.split(X):
-                X_train, X_test = X[train_idx], X[test_idx]
-                Y_train, Y_test = Y[train_idx], Y[test_idx]
-                model = Ridge(alpha=alpha)
-                model.fit(X_train, Y_train)
-                Y_pred = model.predict(X_test)
-                error = np.mean(np.linalg.norm(Y_pred - Y_test, axis=1))
-                errors.append(error)
-        D[i, j] = D[j, i] = np.mean(errors)
-    return D
+
+
 
 
 def compare_all_fMRI(): 
@@ -231,13 +184,12 @@ def compare_all_fMRI():
     compute and save a single region-region distance matrix. 
     """
 
-    regions = ["V1", "V2", "V3", "V4", "V8", "PIT", "FFC", "VVC", "VMV1", "VMV2", "VMV3", "LO1", "LO2", "LO3"]
-    # regions.sort()
+    regions = VISUAL_REGIONS
     
-    subject_n = 30
-    session = 'imagenet01'
-    task = 'imagenet'
-    run_n = 10
+    subject_n = DEFAULT_SUBJECT_COUNT
+    session = DEFAULT_SESSION
+    task = DEFAULT_TASK
+    run_n = DEFAULT_RUN_COUNT
     data_dir = "C:/Users/BrainInspired/Documents/GitHub/NaturalObjectDataset-Processing/NOD/"
     save_dir = "C:/Users/BrainInspired/Documents/GitHub/NaturalObjectDataset-Processing/Nick_RDMs/outputs/intersubject-figures"
 
@@ -251,7 +203,7 @@ def compare_all_fMRI():
 
     region_roi_indices = {}
     for region in regions:
-        roi_indices = get_roi_indices(region)
+        roi_indices = get_region_roi_indices(region)
         
         print(f"Region: {region}, Indices shape: {roi_indices[0].shape}")
         region_roi_indices[region] = roi_indices    
@@ -311,7 +263,7 @@ def compare_all_fMRI():
                 print(f"Shape of all_fmri[{region}]: {all_fmri[region].shape}")
     
     # for figure making 
-    plot_1d_vectors = True
+    plot_1d_vectors = False
     if plot_1d_vectors:
         all_1d_vectors = compute_wasserstein_distance_matrix(all_fmri, regions, plot_1d_vectors=True)
         for region, vec in all_1d_vectors.items():
@@ -321,13 +273,16 @@ def compare_all_fMRI():
             vec = vec[:1000]
             plt.imshow(vec.reshape(1, -1), aspect='auto', cmap='viridis')
 
+            # turn off axes
+            plt.axis('off')
+
             if not os.path.exists(os.path.join(save_dir, "1dvecs")):
                 os.makedirs(os.path.join(save_dir, "1dvecs"), exist_ok=True)
             plt.savefig(os.path.join(save_dir, "1dvecs", f'{region}_1d_vector.png'), transparent=True, dpi=300)
             plt.close()
     else:
         grid = compute_wasserstein_distance_matrix(all_fmri, regions)
-        plot_rdm(grid, 'Wasserstein Distance', regions, save_dir, fname='wasserstein_distance_matrix.png', title='Wasserstein Distance Matrix for All Regions', clim=None)
+        plot_rdm_heatmap(grid, 'Wasserstein Distance', regions, save_dir, fname='wasserstein_distance_matrix.png', title='Wasserstein Distance Matrix for All Regions', clim=None)
     
     # grid = compute_crossval_mapping_distance_matrix(all_fmri, regions)
     # plot_rdm(grid, 'Cross-Validated Linear Mapping Distance', regions, save_dir, fname='crossval_mapping_distance_matrix.png', title='Cross-Validated Linear Mapping Distance Matrix for All Regions', clim=None)

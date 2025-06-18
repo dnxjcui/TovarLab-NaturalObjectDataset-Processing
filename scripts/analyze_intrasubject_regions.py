@@ -15,6 +15,20 @@ from sklearn.manifold import MDS
 from pathlib import Path
 import sys
 from typing import Dict, List
+from utils import (
+    compute_rdm_from_betas,
+    plot_mds_visualization,
+    plot_rdm_heatmap,
+    get_region_roi_indices,
+    get_beta_data,
+    get_labels,
+    compute_wasserstein_distance_matrix,
+    VISUAL_REGIONS,
+    DEFAULT_SESSION,
+    DEFAULT_TASK,
+    DEFAULT_RUN_COUNT,
+    DEFAULT_SUBJECT_COUNT
+)
 
 
 def load_rdms(rdm_dir, subject_n) -> Dict[str, np.ndarray]:
@@ -34,82 +48,148 @@ def load_rdms(rdm_dir, subject_n) -> Dict[str, np.ndarray]:
     return rdms
 
 
-def compute_rdm(beta_weights, metric='correlation'):
+# Removed duplicated functions - now using imports from utils.py
+
+
+def comparison_of_rdms():
     """
-    Compute RDM from RDMs using distance metric.
+    Compare RDMs across different regions of the brain for each subject.
     """
-    rdm = squareform(pdist(beta_weights, metric=metric))
-    return rdm
-
-
-def plot_mds(rdm, all_regions, save_dir):
-    """
-    Plot MDS of the RDM and save the figure.
-    """
-    mds = MDS(n_components=2, dissimilarity='precomputed', random_state=42)
-    coords = mds.fit_transform(rdm)
-
-    plt.figure(figsize=(10, 8))
-    plt.scatter(coords[:, 0], coords[:, 1], marker='o', color='blue')
-    
-    for i, region in enumerate(all_regions):
-        plt.annotate(region, (coords[i, 0], coords[i, 1]), fontsize=12)
-
-    plt.title('MDS of RDM')
-    plt.xlabel('MDS Dimension 1')
-    plt.ylabel('MDS Dimension 2')
-    plt.grid(True)
-    
-    save_path = os.path.join(save_dir, 'mds_plot.png')
-    plt.savefig(save_path)
-    plt.close()
-
-
-def plot_rdm(rdm_square, distance_metric, labels, save_dir, fname='region_region_rdm_heatmap.png', title='Region-Region RDM Heatmap', clim=(0.0, 1.0)):
-    """
-    Plot and save the RDM heatmap.
-    """
-    fig, ax = plt.subplots(figsize=(10, 8))
-    im = ax.imshow(rdm_square, cmap='viridis', interpolation='none')
-    
-    if clim is not None:
-        im.set_clim(clim[0], clim[1])
-    
-    plt.tight_layout()
-    heatmap_path = os.path.join(save_dir, fname)
-    os.makedirs(save_dir, exist_ok=True)
-
-    plt.xticks(ticks=np.arange(len(labels)), labels=labels, rotation=45, ha='right')
-    plt.yticks(ticks=np.arange(len(labels)), labels=labels)
-
-    plt.savefig(heatmap_path, dpi=300, transparent=True)
-    print(f"Heatmap saved at {heatmap_path}")
-
-    plt.close(fig)
-
-
-def main():
     rdm_dir = 'C:/Users/BrainInspired/Documents/GitHub/NaturalObjectDataset-Processing/Nick_RDMs/outputs'
 
     # hard coding to maintain order
-    regions = ["V1", "V2", "V3", "V4", "V8", "PIT", "FFC", "VVC", "VMV1", "VMV2", "VMV3", "LO1", "LO2", "LO3"]
+    regions = VISUAL_REGIONS
 
     for subject_n in range(1, 31):    
         rdms = load_rdms(rdm_dir, subject_n)
         rdm_data = np.array([rdms[region] for region in regions])
 
-        rdm = compute_rdm(rdm_data, metric='correlation') # region-region RDM
+        rdm = compute_rdm_from_betas(rdm_data, metric='correlation') # region-region RDM
 
         save_dir = os.path.join(rdm_dir, f'sub-{subject_n:02d}', 'mds_plots')
         os.makedirs(save_dir, exist_ok=True)
 
         all_regions = list(rdms.keys())
-        plot_mds(rdm, all_regions, save_dir)
+        plot_mds_visualization(rdm, all_regions, save_dir)
 
-        plot_rdm(rdm, 'correlation', all_regions, save_dir)
+        plot_rdm_heatmap(rdm, 'correlation', all_regions, save_dir)
 
         print(f"MDS plot saved to {save_dir}")
 
 
+def comparison_of_voxels():
+    """
+    Compare voxel activations across different regions within each subject using Wasserstein distance.
+    This function loads voxel activations directly and performs region-region comparison 
+    limited to WITHIN each subject, not across ALL subjects.
+    """
+    
+    regions = VISUAL_REGIONS
+    
+    session = DEFAULT_SESSION
+    task = DEFAULT_TASK
+    run_n = DEFAULT_RUN_COUNT
+    data_dir = "C:/Users/BrainInspired/Documents/GitHub/NaturalObjectDataset-Processing/NOD/"
+    rdm_dir = "C:/Users/BrainInspired/Documents/GitHub/NaturalObjectDataset-Processing/Nick_RDMs/outputs"
+
+    if not os.path.exists(data_dir):
+        raise FileNotFoundError(f"Data directory does not exist: {data_dir}")
+
+    all_runs = [f"run-{i+1}" for i in range(run_n)]
+    
+    # Get ROI indices for all regions once
+    region_roi_indices = {}
+    for region in regions:
+        roi_indices = get_region_roi_indices(region)
+        print(f"Region: {region}, Indices shape: {roi_indices[0].shape}")
+        region_roi_indices[region] = roi_indices    
+
+    # Process each subject separately to get intrasubject region comparisons  
+    # for subject_idx in range(1, DEFAULT_SUBJECT_COUNT + 1):
+    for subject_idx in range(1, 2): # for testing
+        subject = f"sub-{subject_idx:02d}"
+        print(f"Processing subject: {subject}")
+        
+        # Create save directory for this subject
+        save_dir = os.path.join(rdm_dir, subject, 'voxel_comparisons')
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir, exist_ok=True)
+        
+        # Initialize data structure for this subject only
+        subject_fmri = {region: None for region in regions}
+        prev_categories = None
+        
+        all_beta_data = None
+        all_categories = []
+        all_fnames = []
+
+        # Fetch all data from runs for this subject and consolidate
+        for run in all_runs:
+            beta_data = get_beta_data(data_dir, subject, session, task, run)
+            categories, fnames = get_labels(data_dir, subject, session, task, run)
+
+            num_conditions, _ = beta_data.shape
+            assert num_conditions == len(categories)
+
+            if all_beta_data is None:
+                all_beta_data = beta_data
+            else:
+                all_beta_data = np.append(all_beta_data, beta_data, axis=0)
+            
+            all_categories.extend(categories)
+            all_fnames.extend(fnames)
+
+        if all_beta_data is None:
+            print(f"Warning: No data found for {subject}, skipping...")
+            continue
+            
+        # Process each region for this subject
+        for region in regions:
+            print(f"Processing region: {region} for subject: {subject}")
+            roi_indices = region_roi_indices[region]
+
+            roi_beta_data = all_beta_data[:, roi_indices[0]]
+            
+            unique_categories = sorted(set(all_categories))
+            label_to_index = {label: i for i, label in enumerate(unique_categories)}
+            sorted_indices = sorted(range(len(all_categories)), key=lambda i: label_to_index[all_categories[i]])
+            sorted_categories = [all_categories[i] for i in sorted_indices]
+
+            # Reshape to [stimuli, voxels, 1] format (single subject)
+            sorted_activations = roi_beta_data[sorted_indices, :]
+            sorted_activations = np.array(sorted_activations).reshape(sorted_activations.shape[0], -1, 1)
+
+            if prev_categories is not None:
+                for i, label in enumerate(sorted_categories):
+                    if label != prev_categories[i]:
+                        print(f"Label mismatch for {subject} in {region}: {label} vs {prev_categories[i]}")
+                        raise ValueError("Labels do not match across runs.")     
+            prev_categories = sorted_categories
+
+            subject_fmri[region] = sorted_activations
+            print(f"Shape of subject_fmri[{region}]: {subject_fmri[region].shape}")
+    
+        # Compute Wasserstein distance matrix for this subject only
+        print(f"Computing Wasserstein distance matrix for {subject}")
+        distance_matrix = compute_wasserstein_distance_matrix(subject_fmri, regions)
+        
+        # Plot and save the region-region distance matrix for this subject
+        plot_rdm_heatmap(
+            distance_matrix, 
+            'Wasserstein Distance', 
+            regions, 
+            save_dir, 
+            fname=f'{subject}_intrasubject_wasserstein_distance_matrix.png', 
+            title=f'Intrasubject Wasserstein Distance Matrix for {subject}', 
+            clim=None
+        )
+        
+        # Also save the matrix as numpy array
+        np.save(os.path.join(save_dir, f'{subject}_wasserstein_distance_matrix.npy'), distance_matrix)
+        
+        print(f"Saved distance matrix for {subject} to {save_dir}")
+            
+
 if __name__ == "__main__":
-    main()
+    # comparison_of_rdms()  # RDM-based comparison
+    comparison_of_voxels()  # Voxel-based comparison within subjects
