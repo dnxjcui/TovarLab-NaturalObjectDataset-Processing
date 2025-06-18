@@ -128,23 +128,27 @@ def plot_rdm_heatmap(rdm_square, distance_metric, labels, save_dir,
         clim (tuple): Color limits for the heatmap
     """
 
-    # make diagonal NaNs
     np.fill_diagonal(rdm_square, np.nan)
 
     fig, ax = plt.subplots(figsize=(10, 8))
     im = ax.imshow(rdm_square, cmap='plasma', interpolation='none')
-    
+
     if clim is not None:
         im.set_clim(clim[0], clim[1])
-    
-    # plt.tight_layout()
+        vmin, vmax = clim[0], clim[1]
+    else:
+        # Get the actual data range (excluding NaNs)
+        vmin = np.nanmin(rdm_square)
+        vmax = np.nanmax(rdm_square)
+        im.set_clim(vmin, vmax)
+
     os.makedirs(save_dir, exist_ok=True)
 
-    # colorbar
-    cbar = plt.colorbar(im, ax=ax)
-    cbar.set_label('Distance')
-    cbar.ax.set_yticklabels(['Low Distance', 'High Distance'])
-    # cbar.set_ticklabels(['Low Distance', 'High Distance'])
+    colorbar = True
+    if colorbar:
+        cbar = plt.colorbar(im, ax=ax)
+        cbar.set_ticks([vmin, vmax])
+        cbar.set_ticklabels(['Low Distance', 'High Distance'])
 
     if fontsize is not None:
         plt.xticks(ticks=np.arange(len(labels)), labels=labels, rotation=45, ha='right', fontsize=fontsize)
