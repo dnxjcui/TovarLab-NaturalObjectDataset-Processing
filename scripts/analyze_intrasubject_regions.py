@@ -179,7 +179,7 @@ def comparison_of_voxels():
             'Wasserstein Distance', 
             regions, 
             save_dir, 
-            fname=f'{subject}_intrasubject_wasserstein_distance_matrix.png', 
+            fname=f'{subject}_intrasubject_wasserstein_distance_matrix.eps', 
             title=f'Intrasubject Wasserstein Distance Matrix for {subject}', 
             clim=None
         )

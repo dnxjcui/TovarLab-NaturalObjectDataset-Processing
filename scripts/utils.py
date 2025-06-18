@@ -112,7 +112,7 @@ def compute_rdm_from_betas(beta_weights, metric='correlation'):
     return rdm
 
 def plot_rdm_heatmap(rdm_square, distance_metric, labels, save_dir, 
-                     fname='region_region_rdm_heatmap.png', 
+                     fname='region_region_rdm_heatmap.eps', 
                      title='Region-Region RDM Heatmap', 
                      clim=(0.0, 1.0), fontsize=None):
     """
@@ -133,7 +133,7 @@ def plot_rdm_heatmap(rdm_square, distance_metric, labels, save_dir,
     if clim is not None:
         im.set_clim(clim[0], clim[1])
     
-    plt.tight_layout()
+    # plt.tight_layout()
     os.makedirs(save_dir, exist_ok=True)
 
     # colorbar
@@ -159,6 +159,7 @@ def plot_rdm_heatmap(rdm_square, distance_metric, labels, save_dir,
         heatmap_path = os.path.join(save_dir, 
                                   fname.split('.')[0] + f'_{fontsize}pt.' + 
                                   fname.split('.')[-1])
+        # plt.savefig(heatmap_path, dpi=300, transparent=True)
         plt.savefig(heatmap_path, dpi=300, transparent=True)
         print(f"Heatmap saved at {heatmap_path}")
         
