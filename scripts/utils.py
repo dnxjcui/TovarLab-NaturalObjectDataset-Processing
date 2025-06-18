@@ -143,8 +143,8 @@ def plot_rdm_heatmap(rdm_square, distance_metric, labels, save_dir,
     # colorbar
     cbar = plt.colorbar(im, ax=ax)
     cbar.set_label('Distance')
-    cbar.set_ticks([0, 1])
-    cbar.set_ticklabels(['Low Distance', 'High Distance'])
+    cbar.ax.set_yticklabels(['Low Distance', 'High Distance'])
+    # cbar.set_ticklabels(['Low Distance', 'High Distance'])
 
     if fontsize is not None:
         plt.xticks(ticks=np.arange(len(labels)), labels=labels, rotation=45, ha='right', fontsize=fontsize)
