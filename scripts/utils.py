@@ -160,7 +160,10 @@ def plot_rdm_heatmap(rdm_square, distance_metric, labels, save_dir,
                                   fname.split('.')[0] + f'_{fontsize}pt.' + 
                                   fname.split('.')[-1])
         # plt.savefig(heatmap_path, dpi=300, transparent=True)
-        plt.savefig(heatmap_path, dpi=300, transparent=True)
+        if fname.split('.')[-1] == 'eps':
+            plt.savefig(heatmap_path, dpi=300, transparent=True, format='eps')
+        else:
+            plt.savefig(heatmap_path, dpi=300, transparent=True)
         print(f"Heatmap saved at {heatmap_path}")
         
 
