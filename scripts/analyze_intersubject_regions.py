@@ -24,6 +24,8 @@ from utils import (
     compute_wasserstein_distance_matrix,
     compute_crossval_mapping_distance_matrix,
     get_fmri_data,
+    clear_fmri_cache,
+    list_fmri_cache,
     VISUAL_REGIONS,
     DEFAULT_SESSION,
     DEFAULT_TASK,
@@ -211,6 +213,9 @@ def compare_all_fMRI():
         grid = compute_wasserstein_distance_matrix(all_fmri, regions)
         plot_heatmap(grid, regions, save_dir, fname='wasserstein_distance_matrix.png', title='Wasserstein Distance Matrix for All Regions', clim=None)
     
+    # save grid
+    np.save(os.path.join(save_dir, 'wasserstein_distance_matrix.npy'), grid)
+
     # grid = compute_crossval_mapping_distance_matrix(all_fmri, regions)
     # plot_rdm(grid, 'Cross-Validated Linear Mapping Distance', regions, save_dir, fname='crossval_mapping_distance_matrix.png', title='Cross-Validated Linear Mapping Distance Matrix for All Regions', clim=None)
     # print(f"Shape of grid: {grid.shape}")
@@ -258,6 +263,8 @@ def track_downstream_regions():
             other_subjects_mask = np.ones(region_data.shape[2], dtype=bool)
             other_subjects_mask[subject_idx] = False
             population_data = region_data[:, :, other_subjects_mask]
+
+            assert(population_data.shape[2] == num_subjects - 1)
             
             # Distance to population (concatenated data from all other subjects)
             population_flattened = population_data.reshape(1, -1).flatten()
@@ -271,31 +278,37 @@ def track_downstream_regions():
                 subject_data, population_mean
             )
 
+    # Save the data matrices for further analysis
+    np.save(os.path.join(save_dir, 'subject_population_distances.npy'), population_distances)
+    np.save(os.path.join(save_dir, 'subject_mean_population_distances.npy'), mean_population_distances)
+
     # Create subject labels
     subject_labels = [f"Sub-{i+1:02d}" for i in range(num_subjects)]
+
+    # normalize across subjects [0, 1] (normalize across all rows for each column)
+    population_distances = (population_distances - population_distances.min(axis=0)) / (population_distances.max(axis=0) - population_distances.min(axis=0))
+    mean_population_distances = (mean_population_distances - mean_population_distances.min(axis=0)) / (mean_population_distances.max(axis=0) - mean_population_distances.min(axis=0))
 
     # Plot and save heatmaps using the new plot_heatmap function
     plot_heatmap(
         population_distances, 
         (subject_labels, regions),  # Pass as tuple for rectangular matrix
         save_dir, 
-        fname='subject_region_distances.png', 
+        fname='subject_region_distances.eps', 
         title='Subject vs Population Wasserstein Distances',
-        clim=None
+        clim=None,
+        fontsize=20
     )
 
     plot_heatmap(
         mean_population_distances, 
         (subject_labels, regions),  # Pass as tuple for rectangular matrix
         save_dir, 
-        fname='subject_region_mean-population_distances.png', 
+        fname='subject_region_mean-population_distances.eps', 
         title='Subject vs Mean Population Wasserstein Distances',
-        clim=None
+        clim=None,
+        fontsize=20
     )
-
-    # Save the data matrices for further analysis
-    np.save(os.path.join(save_dir, 'subject_population_distances.npy'), population_distances)
-    np.save(os.path.join(save_dir, 'subject_mean_population_distances.npy'), mean_population_distances)
 
     print(f"Distance matrices saved in {save_dir}")
     print(f"Population distances shape: {population_distances.shape}")
