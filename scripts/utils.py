@@ -16,6 +16,7 @@ from scipy.stats import wasserstein_distance
 import itertools
 from sklearn.linear_model import Ridge
 from sklearn.model_selection import KFold
+import pickle
 
 # Constants
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -408,6 +409,30 @@ def get_fmri_data(data_dir, regions=None, subject_n=None, session=None, task=Non
     if not os.path.exists(data_dir):
         raise FileNotFoundError(f"Data directory does not exist: {data_dir}")
 
+    # Create cache directory
+    cache_dir = os.path.join(BASE_DIR, 'outputs', 'fmri_data')
+    os.makedirs(cache_dir, exist_ok=True)
+    
+    # Create cache filename based on parameters
+    regions_str = "_".join(sorted(regions))
+    handle_missing_str = "with_missing" if handle_missing_files else "no_missing"
+    cache_filename = f"fmri_data_sub{subject_n}_run{run_n}_{session}_{task}_{handle_missing_str}_{hash(regions_str) % 10000:04d}.pkl"
+    cache_path = os.path.join(cache_dir, cache_filename)
+    
+    # Check if cached data exists
+    if os.path.exists(cache_path):
+        print(f"Loading cached fMRI data from: {cache_filename}")
+        try:
+            with open(cache_path, 'rb') as f:
+                cached_data = pickle.load(f)
+            print(f"Successfully loaded cached data with {len(cached_data)} regions")
+            return cached_data
+        except Exception as e:
+            print(f"Warning: Failed to load cache file {cache_filename}: {e}")
+            print("Proceeding with fresh computation...")
+    
+    print(f"Computing fMRI data from scratch (will cache as: {cache_filename})...")
+
     all_runs = [f"run-{i+1}" for i in range(run_n)]
     all_subjects = [f"sub-{i+1:02d}" for i in range(subject_n)]
 
@@ -497,79 +522,16 @@ def get_fmri_data(data_dir, regions=None, subject_n=None, session=None, task=Non
                 print(f"Shape of all_fmri[{region}]: {all_fmri[region].shape}")
 
     print("fMRI data loading completed.")
+    
+    # Save to cache
+    print(f"Saving fMRI data to cache: {cache_filename}")
+    try:
+        with open(cache_path, 'wb') as f:
+            pickle.dump(all_fmri, f)
+        print(f"Successfully cached fMRI data ({len(all_fmri)} regions)")
+    except Exception as e:
+        print(f"Warning: Failed to save cache file {cache_filename}: {e}")
+    
     return all_fmri
 
-
-def clear_fmri_cache(cache_pattern=None):
-    """
-    Clear cached fMRI data files.
-    
-    Args:
-        cache_pattern (str, optional): Pattern to match for deletion (e.g., '*sub30*'). 
-                                     If None, clears all cache files.
-    """
-    import glob
-    
-    cache_base_dir = os.path.join(BASE_DIR, 'outputs', 'fmri_data')
-    
-    if not os.path.exists(cache_base_dir):
-        print("No fMRI cache directory found.")
-        return
-    
-    if cache_pattern is None:
-        cache_pattern = "*.pkl"
-    
-    cache_files = glob.glob(os.path.join(cache_base_dir, cache_pattern))
-    
-    if not cache_files:
-        print(f"No cache files found matching pattern: {cache_pattern}")
-        return
-    
-    print(f"Found {len(cache_files)} cache files to delete:")
-    for cache_file in cache_files:
-        print(f"  - {os.path.basename(cache_file)}")
-    
-    confirm = input("Delete these files? (y/N): ")
-    if confirm.lower() in ['y', 'yes']:
-        for cache_file in cache_files:
-            try:
-                os.remove(cache_file)
-                print(f"Deleted: {os.path.basename(cache_file)}")
-            except Exception as e:
-                print(f"Error deleting {cache_file}: {e}")
-    else:
-        print("Cache deletion cancelled.")
-
-
-def list_fmri_cache():
-    """
-    List all cached fMRI data files with their details.
-    """
-    import glob
-    
-    cache_base_dir = os.path.join(BASE_DIR, 'outputs', 'fmri_data')
-    
-    if not os.path.exists(cache_base_dir):
-        print("No fMRI cache directory found.")
-        return
-    
-    cache_files = glob.glob(os.path.join(cache_base_dir, "*.pkl"))
-    
-    if not cache_files:
-        print("No cached fMRI files found.")
-        return
-    
-    print(f"Found {len(cache_files)} cached fMRI files:")
-    print("-" * 80)
-    
-    for cache_file in sorted(cache_files):
-        filename = os.path.basename(cache_file)
-        size_mb = os.path.getsize(cache_file) / (1024 * 1024)
-        mtime = os.path.getmtime(cache_file)
-        import datetime
-        mtime_str = datetime.datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M:%S')
-        
-        print(f"File: {filename}")
-        print(f"  Size: {size_mb:.2f} MB")
-        print(f"  Modified: {mtime_str}")
-        print() 
+ 

@@ -235,52 +235,71 @@ def track_downstream_regions():
     if not os.path.exists(save_dir):
         os.makedirs(save_dir, exist_ok=True)
 
-    # Load fMRI data using the utility function with error handling enabled
-    all_fmri = get_fmri_data(data_dir, handle_missing_files=True)
-    regions = list(all_fmri.keys())
-
-    # Initialize distance matrices
-    # Determine number of subjects from the data shape
-    num_subjects = list(all_fmri.values())[0].shape[2] if all_fmri else DEFAULT_SUBJECT_COUNT
-    num_regions = len(regions)
+    # Check if data has already been saved - if so, load it instead of reprocessing
+    population_distances_file = os.path.join(save_dir, 'subject_population_distances.npy')
+    mean_population_distances_file = os.path.join(save_dir, 'subject_mean_population_distances.npy')
     
-    # Matrix 1: Distance to population (excluding subject)
-    population_distances = np.zeros((num_subjects, num_regions))
-    
-    # Matrix 2: Distance to population mean (excluding subject)
-    mean_population_distances = np.zeros((num_subjects, num_regions))
-
-    # Compute distances for each subject and region
-    for region_idx, region in enumerate(regions):
-        print(f"Computing distances for region: {region}")
-        region_data = all_fmri[region]  # Shape: (num_conditions, num_voxels, num_subjects)
+    if os.path.exists(population_distances_file) and os.path.exists(mean_population_distances_file):
+        print("Loading previously saved distance matrices...")
+        population_distances = np.load(population_distances_file)
+        mean_population_distances = np.load(mean_population_distances_file)
         
-        for subject_idx in range(min(num_subjects, region_data.shape[2])):
-            # Get subject's data
-            subject_data = region_data[:, :, subject_idx].flatten()
-            
-            # Get population data excluding current subject
-            other_subjects_mask = np.ones(region_data.shape[2], dtype=bool)
-            other_subjects_mask[subject_idx] = False
-            population_data = region_data[:, :, other_subjects_mask]
+        # Load fMRI data to get regions for plotting
+        all_fmri = get_fmri_data(data_dir, handle_missing_files=True)
+        regions = list(all_fmri.keys())
+        num_subjects = population_distances.shape[0]
+        
+        print(f"Loaded population distances shape: {population_distances.shape}")
+        print(f"Loaded mean population distances shape: {mean_population_distances.shape}")
+    else:
+        print("Computing distance matrices from scratch...")
+        
+        # Load fMRI data using the utility function with error handling enabled
+        all_fmri = get_fmri_data(data_dir, handle_missing_files=True)
+        regions = list(all_fmri.keys())
 
-            assert(population_data.shape[2] == num_subjects - 1)
-            
-            # Distance to population (concatenated data from all other subjects)
-            population_flattened = population_data.reshape(1, -1).flatten()
-            population_distances[subject_idx, region_idx] = wasserstein_distance(
-                subject_data, population_flattened
-            )
-            
-            # Distance to population mean (excluding subject)
-            population_mean = np.mean(population_data, axis=2).flatten()
-            mean_population_distances[subject_idx, region_idx] = wasserstein_distance(
-                subject_data, population_mean
-            )
+        # Initialize distance matrices
+        # Determine number of subjects from the data shape
+        num_subjects = list(all_fmri.values())[0].shape[2] if all_fmri else DEFAULT_SUBJECT_COUNT
+        num_regions = len(regions)
+        
+        # Matrix 1: Distance to population (excluding subject)
+        population_distances = np.zeros((num_subjects, num_regions))
+        
+        # Matrix 2: Distance to population mean (excluding subject)
+        mean_population_distances = np.zeros((num_subjects, num_regions))
 
-    # Save the data matrices for further analysis
-    np.save(os.path.join(save_dir, 'subject_population_distances.npy'), population_distances)
-    np.save(os.path.join(save_dir, 'subject_mean_population_distances.npy'), mean_population_distances)
+        # Compute distances for each subject and region
+        for region_idx, region in enumerate(regions):
+            print(f"Computing distances for region: {region}")
+            region_data = all_fmri[region]  # Shape: (num_conditions, num_voxels, num_subjects)
+            
+            for subject_idx in range(min(num_subjects, region_data.shape[2])):
+                # Get subject's data
+                subject_data = region_data[:, :, subject_idx].flatten()
+                
+                # Get population data excluding current subject
+                other_subjects_mask = np.ones(region_data.shape[2], dtype=bool)
+                other_subjects_mask[subject_idx] = False
+                population_data = region_data[:, :, other_subjects_mask]
+
+                assert(population_data.shape[2] == num_subjects - 1)
+                
+                # Distance to population (concatenated data from all other subjects)
+                population_flattened = population_data.reshape(1, -1).flatten()
+                population_distances[subject_idx, region_idx] = wasserstein_distance(
+                    subject_data, population_flattened
+                )
+                
+                # Distance to population mean (excluding subject)
+                population_mean = np.mean(population_data, axis=2).flatten()
+                mean_population_distances[subject_idx, region_idx] = wasserstein_distance(
+                    subject_data, population_mean
+                )
+
+        # Save the data matrices for further analysis
+        np.save(os.path.join(save_dir, 'subject_population_distances.npy'), population_distances)
+        np.save(os.path.join(save_dir, 'subject_mean_population_distances.npy'), mean_population_distances)
 
     # Create subject labels
     subject_labels = [f"Sub-{i+1:02d}" for i in range(num_subjects)]
@@ -294,7 +313,7 @@ def track_downstream_regions():
         population_distances, 
         (subject_labels, regions),  # Pass as tuple for rectangular matrix
         save_dir, 
-        fname='subject_region_distances.eps', 
+        fname='subject_region_distances.svg', 
         title='Subject vs Population Wasserstein Distances',
         clim=None,
         fontsize=20
@@ -304,7 +323,7 @@ def track_downstream_regions():
         mean_population_distances, 
         (subject_labels, regions),  # Pass as tuple for rectangular matrix
         save_dir, 
-        fname='subject_region_mean-population_distances.eps', 
+        fname='subject_region_mean-population_distances.svg', 
         title='Subject vs Mean Population Wasserstein Distances',
         clim=None,
         fontsize=20
