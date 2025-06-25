@@ -111,49 +111,77 @@ def compute_rdm_from_betas(beta_weights, metric='correlation'):
     rdm = squareform(pdist(beta_weights, metric=metric))
     return rdm
 
-def plot_rdm_heatmap(rdm_square, distance_metric, labels, save_dir, 
-                     fname='region_region_rdm_heatmap.eps', 
-                     title='Region-Region RDM Heatmap', 
-                     clim=(0.0, 1.0), fontsize=None):
+def plot_heatmap(data_matrix, labels, save_dir, 
+                 fname='region_region_rdm_heatmap.eps', 
+                 title='Region-Region RDM Heatmap', 
+                 clim=(0.0, 1.0), fontsize=None):
     """
-    Plot and save the RDM heatmap.
+    Plot and save a heatmap for either square RDM matrices or rectangular matrices.
     
     Args:
-        rdm_square (numpy.ndarray): Square RDM matrix
-        distance_metric (str): Name of the distance metric used
-        labels (list): Labels for the axes
+        data_matrix (numpy.ndarray): Square RDM matrix or rectangular matrix
+        labels (list): Labels for the axes (for square) or tuple of (y_labels, x_labels) for rectangular
         save_dir (str): Directory to save the plot
         fname (str): Filename for the saved plot
         title (str): Plot title
         clim (tuple): Color limits for the heatmap
+        fontsize (int): Font size for labels
     """
+    rows, cols = data_matrix.shape
+    is_square = (rows == cols)
+    
+    # Handle diagonal fill for square matrices only
+    if is_square:
+        np.fill_diagonal(data_matrix, np.nan)
 
-    np.fill_diagonal(rdm_square, np.nan)
+    # Determine appropriate figure size based on matrix dimensions
+    if is_square:
+        fig, ax = plt.subplots(figsize=(10, 8))
+        aspect = 'equal'
+    else:
+        # For rectangular matrices, adjust figure size dynamically
+        aspect_ratio = cols / rows
+        if aspect_ratio > 2:  # Wide matrix
+            fig, ax = plt.subplots(figsize=(12, 6))
+        elif aspect_ratio < 0.5:  # Tall matrix
+            fig, ax = plt.subplots(figsize=(8, 12))
+        else:  # Moderate rectangle
+            fig, ax = plt.subplots(figsize=(10, 8))
+        aspect = 'auto'
 
-    fig, ax = plt.subplots(figsize=(10, 8))
-    im = ax.imshow(rdm_square, cmap='plasma', interpolation='none')
+    im = ax.imshow(data_matrix, cmap='plasma', interpolation='none', aspect=aspect)
 
     if clim is not None:
         im.set_clim(clim[0], clim[1])
         vmin, vmax = clim[0], clim[1]
     else:
         # Get the actual data range (excluding NaNs)
-        vmin = np.nanmin(rdm_square)
-        vmax = np.nanmax(rdm_square)
+        vmin = np.nanmin(data_matrix)
+        vmax = np.nanmax(data_matrix)
         im.set_clim(vmin, vmax)
 
     os.makedirs(save_dir, exist_ok=True)
 
+    # Handle labels for square vs rectangular matrices
+    if is_square:
+        x_labels = y_labels = labels
+    else:
+        if isinstance(labels, tuple) and len(labels) == 2:
+            y_labels, x_labels = labels
+        else:
+            raise ValueError(f"Labels must be a tuple of length 2: {labels}")
+
     colorbar = True
     if fontsize is not None:
-        plt.xticks(ticks=np.arange(len(labels)), labels=labels, rotation=45, ha='right', fontsize=fontsize)
-        plt.yticks(ticks=np.arange(len(labels)), labels=labels, fontsize=fontsize)
+        plt.xticks(ticks=np.arange(len(x_labels)), labels=x_labels, rotation=45, ha='right', fontsize=fontsize)
+        plt.yticks(ticks=np.arange(len(y_labels)), labels=y_labels, fontsize=fontsize)
 
         heatmap_path = os.path.join(save_dir, fname.split('.')[0] + f'_{fontsize}pt.' + fname.split('.')[-1])
 
-        for file in os.listdir(save_dir):
-            if file.endswith('.eps') or file.endswith('.svg') or file.endswith('.png'):
-                os.remove(os.path.join(save_dir, file))
+        # for file in os.listdir(save_dir):
+        #     # if file.endswith('.eps') or file.endswith('.svg') or file.endswith('.png'):
+        #     if file.split('_')[2] == 'wasserstein':
+        #         os.remove(os.path.join(save_dir, file))
 
         if colorbar:
             cbar = plt.colorbar(im, ax=ax)
@@ -172,15 +200,15 @@ def plot_rdm_heatmap(rdm_square, distance_metric, labels, save_dir,
         return
 
     for fontsize in range(20, 10, -1):
-        plt.xticks(ticks=np.arange(len(labels)), labels=labels, 
+        plt.xticks(ticks=np.arange(len(x_labels)), labels=x_labels, 
                   rotation=45, ha='right', fontsize=fontsize)
-        plt.yticks(ticks=np.arange(len(labels)), labels=labels, 
+        plt.yticks(ticks=np.arange(len(y_labels)), labels=y_labels, 
                   fontsize=fontsize)
 
         heatmap_path = os.path.join(save_dir, 
                                   fname.split('.')[0] + f'_{fontsize}pt.' + 
                                   fname.split('.')[-1])
-        if colorbar:
+        if colorbar and fontsize == 20:
             cbar = plt.colorbar(im, ax=ax)
             cbar.set_ticks([vmin, vmax])
             cbar.set_ticklabels(['Low Distance', 'High Distance'], fontsize=fontsize)
@@ -264,6 +292,8 @@ def plot_mds_visualization(rdm, all_regions, save_dir, fname='mds_plot.png', fon
     else:
         plt.savefig(save_path, dpi=300, transparent=True)
 
+    print(f"MDS plot saved at {save_path}")
+
     plt.close()
 
 def compute_wasserstein_distance_matrix(all_fmri, regions, plot_1d_vectors=False):
@@ -339,4 +369,132 @@ def compute_crossval_mapping_distance_matrix(all_fmri, regions, alpha=1.0, n_spl
                 error = np.mean(np.linalg.norm(Y_pred - Y_test, axis=1))
                 errors.append(error)
         D[i, j] = D[j, i] = np.mean(errors)
-    return D 
+    return D
+
+
+def get_fmri_data(data_dir, regions=None, subject_n=None, session=None, task=None, run_n=None, 
+                  handle_missing_files=False):
+    """
+    Load and consolidate fMRI data across subjects, runs, and regions.
+    
+    Args:
+        data_dir (str): Base directory containing the fMRI data
+        regions (list, optional): List of brain regions to process. Defaults to VISUAL_REGIONS
+        subject_n (int, optional): Number of subjects to process. Defaults to DEFAULT_SUBJECT_COUNT
+        session (str, optional): Session identifier. Defaults to DEFAULT_SESSION
+        task (str, optional): Task identifier. Defaults to DEFAULT_TASK
+        run_n (int, optional): Number of runs to process. Defaults to DEFAULT_RUN_COUNT
+        handle_missing_files (bool): Whether to handle missing files gracefully. Defaults to False
+        
+    Returns:
+        dict: Dictionary with region names as keys and 3D arrays as values.
+              Each array has shape (num_conditions, num_voxels, num_subjects)
+              
+    Raises:
+        FileNotFoundError: If data directory doesn't exist or required files are missing
+    """
+    # Set defaults
+    if regions is None:
+        regions = VISUAL_REGIONS
+    if subject_n is None:
+        subject_n = DEFAULT_SUBJECT_COUNT
+    if session is None:
+        session = DEFAULT_SESSION
+    if task is None:
+        task = DEFAULT_TASK
+    if run_n is None:
+        run_n = DEFAULT_RUN_COUNT
+    
+    if not os.path.exists(data_dir):
+        raise FileNotFoundError(f"Data directory does not exist: {data_dir}")
+
+    all_runs = [f"run-{i+1}" for i in range(run_n)]
+    all_subjects = [f"sub-{i+1:02d}" for i in range(subject_n)]
+
+    # Get ROI indices for each region
+    print("Getting ROI indices for regions...")
+    region_roi_indices = {}
+    for region in regions:
+        roi_indices = get_region_roi_indices(region)
+        print(f"Region: {region}, Indices shape: {roi_indices[0].shape}")
+        region_roi_indices[region] = roi_indices    
+
+    # Initialize data structure
+    all_fmri = {region: None for region in regions}
+    prev_categories = None
+    
+    # Process each subject
+    for subject_idx, subject in enumerate(all_subjects):
+        print(f"Processing subject: {subject} ({subject_idx + 1}/{len(all_subjects)})")
+        all_beta_data = None
+        all_categories = []
+        all_fnames = []
+
+        # Fetch all data from runs for this subject and consolidate
+        for run in all_runs:
+            try:
+                beta_data = get_beta_data(data_dir, subject, session, task, run)
+                categories, fnames = get_labels(data_dir, subject, session, task, run)
+
+                num_conditions, _ = beta_data.shape
+                assert num_conditions == len(categories), f"Mismatch: {num_conditions} conditions vs {len(categories)} labels"
+
+                if all_beta_data is None:
+                    all_beta_data = beta_data
+                else:
+                    all_beta_data = np.append(all_beta_data, beta_data, axis=0)
+                
+                all_categories.extend(categories)
+                all_fnames.extend(fnames)
+                
+            except FileNotFoundError as e:
+                if handle_missing_files:
+                    print(f"Warning: Skipping {subject} {run} due to missing file: {e}")
+                    continue
+                else:
+                    raise e
+        
+        if all_beta_data is None:
+            if handle_missing_files:
+                print(f"Warning: No data found for {subject}, skipping")
+                continue
+            else:
+                raise FileNotFoundError(f"No data found for {subject}")
+
+        # Process each region for this subject
+        for region in regions:
+            print(f"Processing region: {region} for subject: {subject}")
+            roi_indices = region_roi_indices[region]
+            roi_beta_data = all_beta_data[:, roi_indices[0]]
+            
+            # Sort data by categories for consistency across subjects
+            unique_categories = sorted(set(all_categories))
+            label_to_index = {label: i for i, label in enumerate(unique_categories)}
+            sorted_indices = sorted(range(len(all_categories)), key=lambda i: label_to_index[all_categories[i]])
+            sorted_categories = [all_categories[i] for i in sorted_indices]
+            sorted_activations = roi_beta_data[sorted_indices, :]
+
+            # Ensure labels are consistent across subjects
+            if prev_categories is not None:
+                for i, label in enumerate(sorted_categories):
+                    if i < len(prev_categories) and label != prev_categories[i]:
+                        if handle_missing_files:
+                            print(f"Warning: Label mismatch for {subject} in {region}: {label} vs {prev_categories[i]}")
+                        else:
+                            raise ValueError(f"Label mismatch for {subject} in {region}: {label} vs {prev_categories[i]}")
+            prev_categories = sorted_categories
+
+            # Reshape and stack data across subjects
+            sorted_activations_reshaped = sorted_activations.reshape(sorted_activations.shape[0], -1, 1)
+            
+            if all_fmri[region] is None:
+                all_fmri[region] = sorted_activations_reshaped
+            else:
+                all_fmri[region] = np.concatenate([
+                    all_fmri[region], 
+                    sorted_activations_reshaped
+                ], axis=2)
+                print(f"Shape of all_fmri[{region}]: {all_fmri[region].shape}")
+
+    print("fMRI data loading completed.")
+    return all_fmri 

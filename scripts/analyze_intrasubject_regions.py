@@ -18,7 +18,7 @@ from typing import Dict, List
 from utils import (
     compute_rdm_from_betas,
     plot_mds_visualization,
-    plot_rdm_heatmap,
+    plot_heatmap,
     get_region_roi_indices,
     get_beta_data,
     get_labels,
@@ -72,7 +72,7 @@ def comparison_of_rdms():
         all_regions = list(rdms.keys())
         plot_mds_visualization(rdm, all_regions, save_dir)
 
-        plot_rdm_heatmap(rdm, 'correlation', all_regions, save_dir)
+        plot_heatmap(rdm, all_regions, save_dir)
 
         print(f"MDS plot saved to {save_dir}")
 
@@ -177,9 +177,8 @@ def comparison_of_voxels():
         plot_mds_visualization(distance_matrix, regions, save_dir, fname='mds_plot.svg', fontsize=20)
         
         # Plot and save the region-region distance matrix for this subject
-        plot_rdm_heatmap(
+        plot_heatmap(
             distance_matrix, 
-            'Wasserstein Distance', 
             regions, 
             save_dir, 
             fname=f'{subject}_intrasubject_wasserstein_distance_matrix.svg', 
@@ -189,7 +188,7 @@ def comparison_of_voxels():
         )
         
         # Also save the matrix as numpy array
-        np.save(os.path.join(save_dir, f'{subject}_wasserstein_distance_matrix.npy'), distance_matrix)
+        # np.save(os.path.join(save_dir, f'{subject}_wasserstein_distance_matrix.npy'), distance_matrix)
         
         print(f"Saved distance matrix for {subject} to {save_dir}")
             

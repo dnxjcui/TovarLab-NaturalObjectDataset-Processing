@@ -8,20 +8,22 @@ Usage:
   python analyze_intersubject_regions.py --rdm_dir outputs/ --region V1
 """
 import argparse
+import time
 import numpy as np
 import os
 from analyze_intrasubject_regions import load_rdms
-from scipy.stats import pearsonr
+from scipy.stats import pearsonr, wasserstein_distance
 import matplotlib.pyplot as plt
 from scipy.spatial.distance import squareform
 from utils import (
     compute_rdm_from_betas, 
-    plot_rdm_heatmap,
+    plot_heatmap,
     get_beta_data, 
     get_labels, 
     get_region_roi_indices,
     compute_wasserstein_distance_matrix,
     compute_crossval_mapping_distance_matrix,
+    get_fmri_data,
     VISUAL_REGIONS,
     DEFAULT_SESSION,
     DEFAULT_TASK,
@@ -169,13 +171,7 @@ def compare_similarity_matrices():
 
     # plot the RDM for all regions
     all_regions = list(rdm_per_region.keys())
-    plot_rdm_heatmap(rdm, 'Correlation', all_regions, save_dir, fname='all_regions_rdm2rdm.png', title='RDM-RDM RDM Heatmap for All Regions')
-
-
-
-
-
-
+    plot_heatmap(rdm, all_regions, save_dir, fname='all_regions_rdm2rdm.png', title='RDM-RDM RDM Heatmap for All Regions')
 
 
 def compare_all_fMRI(): 
@@ -183,84 +179,15 @@ def compare_all_fMRI():
     Loads in and then compares all fMRI voxel data across subjects and regions using Gromov-Wasserstein distance to 
     compute and save a single region-region distance matrix. 
     """
-
-    regions = VISUAL_REGIONS
-    
-    subject_n = DEFAULT_SUBJECT_COUNT
-    session = DEFAULT_SESSION
-    task = DEFAULT_TASK
-    run_n = DEFAULT_RUN_COUNT
     data_dir = "C:/Users/BrainInspired/Documents/GitHub/NaturalObjectDataset-Processing/NOD/"
     save_dir = "C:/Users/BrainInspired/Documents/GitHub/NaturalObjectDataset-Processing/Nick_RDMs/outputs/intersubject-figures"
-
-    if not os.path.exists(data_dir):
-        raise FileNotFoundError(f"Data directory does not exist: {data_dir}")
+    
     if not os.path.exists(save_dir):
         os.makedirs(save_dir, exist_ok=True)
 
-    all_runs = [f"run-{i+1}" for i in range(run_n)]
-    all_subjects = [f"sub-{i+1:02d}" for i in range(subject_n)]
-
-    region_roi_indices = {}
-    for region in regions:
-        roi_indices = get_region_roi_indices(region)
-        
-        print(f"Region: {region}, Indices shape: {roi_indices[0].shape}")
-        region_roi_indices[region] = roi_indices    
-
-    all_fmri = {
-        region : None for region in regions
-    }
-    prev_categories = None
-    for subject in all_subjects:
-        print(f"Processing subject: {subject}")
-        all_beta_data = None
-        all_categories = []
-        all_fnames = []
-
-        # fetch all the data from the runs for the subject and consolidate
-        for run in all_runs:
-            beta_data = get_beta_data(data_dir, subject, session, task, run)
-            categories, fnames = get_labels(data_dir, subject, session, task, run)
-
-            num_conditions, _ = beta_data.shape
-            assert num_conditions == len(categories)
-
-            if all_beta_data is None:
-                all_beta_data = beta_data
-            else:
-                all_beta_data = np.append(all_beta_data, beta_data, axis=0)
-            
-            all_categories.extend(categories)
-            all_fnames.extend(fnames)
-        
-        for region in regions:
-            print(f"Processing region: {region} for subject: {subject} . . .")
-            roi_indices = region_roi_indices[region]
-
-            roi_beta_data = all_beta_data[:, roi_indices[0]]
-            
-            unique_categories = sorted(set(all_categories))
-            label_to_index = {label: i for i, label in enumerate(unique_categories)}
-            sorted_indices = sorted(range(len(all_categories)), key=lambda i: label_to_index[all_categories[i]])
-            sorted_categories = [all_categories[i] for i in sorted_indices]
-
-            sorted_activations = roi_beta_data[sorted_indices, :]
-            sorted_activations = np.array(sorted_activations).reshape(sorted_activations.shape[0], -1, 1)
-
-            # make sure labels are sorted the same and consistent across subjects
-            if prev_categories is not None:
-                for i, label in enumerate(sorted_categories):
-                    if label != prev_categories[i]:
-                        print(f"Label mismatch for {subject} in {region}: {label} vs {prev_categories[i]}")
-                        raise ValueError("Labels do not match across runs.")     
-            prev_categories = sorted_categories
-
-            if all_fmri[region] is None:
-                all_fmri[region] = sorted_activations
-            else:
-                all_fmri[region] = np.append(all_fmri[region], sorted_activations, axis=2)
-                print(f"Shape of all_fmri[{region}]: {all_fmri[region].shape}")
+    # Load fMRI data using the utility function
+    all_fmri = get_fmri_data(data_dir, handle_missing_files=False)
+    regions = list(all_fmri.keys())
     
     # for figure making 
     plot_1d_vectors = False
@@ -282,13 +209,105 @@ def compare_all_fMRI():
             plt.close()
     else:
         grid = compute_wasserstein_distance_matrix(all_fmri, regions)
-        plot_rdm_heatmap(grid, 'Wasserstein Distance', regions, save_dir, fname='wasserstein_distance_matrix.png', title='Wasserstein Distance Matrix for All Regions', clim=None)
+        plot_heatmap(grid, regions, save_dir, fname='wasserstein_distance_matrix.png', title='Wasserstein Distance Matrix for All Regions', clim=None)
     
     # grid = compute_crossval_mapping_distance_matrix(all_fmri, regions)
     # plot_rdm(grid, 'Cross-Validated Linear Mapping Distance', regions, save_dir, fname='crossval_mapping_distance_matrix.png', title='Cross-Validated Linear Mapping Distance Matrix for All Regions', clim=None)
     # print(f"Shape of grid: {grid.shape}")
-    
 
+
+def track_downstream_regions():
+    """
+    Attempts to answer: if a subject has a low correlation in early regions (e.g. V1) from the population, 
+    does this translate to a low correlation in later regions (e.g. V2, LO3, etc.)?
+    The final output should be some heatmap with dimension subject x region, that tracks the distance 
+    between the subject's fMRI data and the population's fMRI data.
+    """
+    tic = time.time()
+    data_dir = "C:/Users/BrainInspired/Documents/GitHub/NaturalObjectDataset-Processing/NOD/"
+    save_dir = "C:/Users/BrainInspired/Documents/GitHub/NaturalObjectDataset-Processing/Nick_RDMs/outputs/intersubject-figures"
+
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir, exist_ok=True)
+
+    # Load fMRI data using the utility function with error handling enabled
+    all_fmri = get_fmri_data(data_dir, handle_missing_files=True)
+    regions = list(all_fmri.keys())
+
+    # Initialize distance matrices
+    # Determine number of subjects from the data shape
+    num_subjects = list(all_fmri.values())[0].shape[2] if all_fmri else DEFAULT_SUBJECT_COUNT
+    num_regions = len(regions)
+    
+    # Matrix 1: Distance to population (excluding subject)
+    population_distances = np.zeros((num_subjects, num_regions))
+    
+    # Matrix 2: Distance to population mean (excluding subject)
+    mean_population_distances = np.zeros((num_subjects, num_regions))
+
+    # Compute distances for each subject and region
+    for region_idx, region in enumerate(regions):
+        print(f"Computing distances for region: {region}")
+        region_data = all_fmri[region]  # Shape: (num_conditions, num_voxels, num_subjects)
+        
+        for subject_idx in range(min(num_subjects, region_data.shape[2])):
+            # Get subject's data
+            subject_data = region_data[:, :, subject_idx].flatten()
+            
+            # Get population data excluding current subject
+            other_subjects_mask = np.ones(region_data.shape[2], dtype=bool)
+            other_subjects_mask[subject_idx] = False
+            population_data = region_data[:, :, other_subjects_mask]
+            
+            # Distance to population (concatenated data from all other subjects)
+            population_flattened = population_data.reshape(1, -1).flatten()
+            population_distances[subject_idx, region_idx] = wasserstein_distance(
+                subject_data, population_flattened
+            )
+            
+            # Distance to population mean (excluding subject)
+            population_mean = np.mean(population_data, axis=2).flatten()
+            mean_population_distances[subject_idx, region_idx] = wasserstein_distance(
+                subject_data, population_mean
+            )
+
+    # Create subject labels
+    subject_labels = [f"Sub-{i+1:02d}" for i in range(num_subjects)]
+
+    # Plot and save heatmaps using the new plot_heatmap function
+    plot_heatmap(
+        population_distances, 
+        (subject_labels, regions),  # Pass as tuple for rectangular matrix
+        save_dir, 
+        fname='subject_region_distances.png', 
+        title='Subject vs Population Wasserstein Distances',
+        clim=None
+    )
+
+    plot_heatmap(
+        mean_population_distances, 
+        (subject_labels, regions),  # Pass as tuple for rectangular matrix
+        save_dir, 
+        fname='subject_region_mean-population_distances.png', 
+        title='Subject vs Mean Population Wasserstein Distances',
+        clim=None
+    )
+
+    # Save the data matrices for further analysis
+    np.save(os.path.join(save_dir, 'subject_population_distances.npy'), population_distances)
+    np.save(os.path.join(save_dir, 'subject_mean_population_distances.npy'), mean_population_distances)
+
+    print(f"Distance matrices saved in {save_dir}")
+    print(f"Population distances shape: {population_distances.shape}")
+    print(f"Mean population distances shape: {mean_population_distances.shape}")
+
+    toc = time.time()
+    print(f"Time taken: {toc - tic} seconds")
+
+    return population_distances, mean_population_distances 
+    
+    
 if __name__ == "__main__":
     # compare_similarity_matrices()
-    compare_all_fMRI()
+    # compare_all_fMRI()
+    track_downstream_regions()

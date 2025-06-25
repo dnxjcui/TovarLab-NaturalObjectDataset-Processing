@@ -28,7 +28,7 @@ from utils import (
     compute_rdm_from_betas, 
     get_beta_data,
     get_labels,
-    plot_rdm_heatmap,
+    plot_heatmap,
     VISUAL_REGIONS,
     DEFAULT_SESSION,
     DEFAULT_TASK,
@@ -46,12 +46,6 @@ def parse_args():
     parser.add_argument('--task', type=str, default='imagenet',
                        help='Task to create RDMs for (default: imagenet)')
     return parser.parse_args()
-
-
-# Removed duplicated functions - now using imports from utils.py
-
-
-# Moved get_labels function to utils.py
 
 
 def plot_rdm_no_background(rdm_square, subject, session, region, distance_metric, save_dir):
@@ -159,9 +153,8 @@ def main():
                 
                 # Also create a standard version using utils.py function
                 standard_save_dir = os.path.join(save_dir, subject, 'figures', 'standard')
-                plot_rdm_heatmap(
+                plot_heatmap(
                     rdm_square, 
-                    distance_metric, 
                     [], # no labels for cleaner look
                     standard_save_dir, 
                     fname=f'{region}_roi_rdm_standard.png',
